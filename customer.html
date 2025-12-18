@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AhmedJ POC - صفحة العميل | Customer Payment</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Common Styles -->
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div class="container container-full">
+        <div class="header customer">
+            <h1>💳 صفحة الدفع - Customer Payment</h1>
+            <p>أدخل موقعك للتحقق من إمكانية إتمام الدفع</p>
+            <a href="merchant.html" class="back-link">← العودة إلى صفحة التاجر</a>
+        </div>
+        
+        <div class="payment-section">
+            <h2>معلومات الدفع</h2>
+            
+            <div class="payment-amount">
+                المبلغ: 100.00 ر.س
+            </div>
+            
+            <div class="input-group">
+                <label for="customerCoordinates">الإحداثيات (خط الطول، خط العرض) - Longitude, Latitude</label>
+                <input type="text" id="customerCoordinates" placeholder="24.737893, 46.651571" 
+                       style="font-family: monospace; direction: ltr !important; text-align: left !important;" dir="ltr">
+            </div>
+            
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn btn-primary" onclick="getCurrentLocation()">📍 الحصول على الموقع الحالي</button>
+                <button class="btn btn-primary" onclick="validateLocation()">✅ التحقق من الموقع</button>
+                <button class="btn btn-secondary" onclick="processPayment()">💳 إتمام الدفع</button>
+            </div>
+            
+            <div id="validationStatus" class="validation-status pending" style="display: none;">
+                ⏳ في انتظار التحقق من الموقع...
+            </div>
+            
+            <div id="locationInfo" class="location-info" style="display: none;">
+                <strong>الموقع الحالي:</strong><br>
+                <span id="currentCoords">-</span><br>
+                <span id="currentH3">-</span>
+            </div>
+            
+            <div id="lockedAreaInfo" class="location-info" style="display: none;">
+                <strong>منطقة الدفع المسموحة:</strong><br>
+                <span id="lockedH3Display">-</span><br>
+                <span id="lockedLocationDisplay">-</span>
+            </div>
+        </div>
+        
+        <div id="map"></div>
+    </div>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- H3 JS -->
+    <script src="https://unpkg.com/h3-js@4.3.0/dist/h3-js.umd.js"></script>
+    <!-- Common JS -->
+    <script src="common.js"></script>
+    
+    <script>
+        // Initialize customer page when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCustomerPage();
+        });
+    </script>
+</body>
+</html>
+

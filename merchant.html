@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AhmedJ POC - تسجيل التاجر | Merchant Registration</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Common Styles -->
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏪 تسجيل التاجر - Merchant Registration</h1>
+            <p>املأ النموذج لتسجيل معلومات التاجر ومنطقة الدفع</p>
+        </div>
+        
+        <div class="form-container">
+            <div id="successMessage" class="success-message">
+                ✅ تم حفظ بيانات التاجر بنجاح!
+            </div>
+            
+            <div id="errorMessage" class="error-message">
+                ❌ حدث خطأ أثناء الحفظ
+            </div>
+            
+            <form id="merchantForm" onsubmit="saveMerchant(event)">
+                <!-- Merchant Information Section -->
+                <div class="form-section">
+                    <h2>معلومات التاجر</h2>
+                    
+                    <div class="form-row">
+                        <div class="input-group">
+                            <label for="merchantName">اسم التاجر <span class="required">*</span></label>
+                            <input type="text" id="merchantName" name="merchantName" required>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label for="merchantId">رقم التاجر <span class="required">*</span></label>
+                            <input type="text" id="merchantId" name="merchantId" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="input-group">
+                            <label for="phone">رقم الهاتف <span class="required">*</span></label>
+                            <input type="tel" id="phone" name="phone" required>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label for="email">البريد الإلكتروني</label>
+                            <input type="email" id="email" name="email">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="input-group full-width">
+                            <label for="address">العنوان</label>
+                            <textarea id="address" name="address" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Payment Area Selection Section -->
+                <div class="form-section">
+                    <h2>تحديد منطقة الدفع (Payment Area Selection) <span class="required">*</span></h2>
+                    
+                    <div class="map-controls">
+                        <div class="input-group" style="flex: 1; min-width: 200px;">
+                            <label for="coordinates">الإحداثيات (خط الطول، خط العرض)</label>
+                            <input type="text" id="coordinates" placeholder="24.737893, 46.651571" 
+                                   style="font-family: monospace; direction: ltr !important; text-align: left !important;" dir="ltr">
+                        </div>
+                        
+                        <div class="input-group" style="min-width: 150px;">
+                            <label for="latitude">خط العرض</label>
+                            <input type="number" id="latitude" step="any" dir="ltr" readonly>
+                        </div>
+                        
+                        <div class="input-group" style="min-width: 150px;">
+                            <label for="longitude">خط الطول</label>
+                            <input type="number" id="longitude" step="any" dir="ltr" readonly>
+                        </div>
+                        
+                        <div class="input-group" style="min-width: 150px;">
+                            <label for="resolution">الدقة</label>
+                            <select id="resolution">
+                                <option value="0">0 - الأقل دقة (القارات)</option>
+                                <option value="1">1 - كبير جداً (الدول)</option>
+                                <option value="2">2 - كبير (الولايات/المحافظات)</option>
+                                <option value="3">3 - متوسط-كبير (المناطق)</option>
+                                <option value="4">4 - متوسط (المحافظات)</option>
+                                <option value="5">5 - متوسط-صغير (المدن)</option>
+                                <option value="6">6 - صغير (البلدات)</option>
+                                <option value="7">7 - أصغر (أحياء المدينة)</option>
+                                <option value="8" selected>8 - صغير (الأحياء)</option>
+                                <option value="9">9 - صغير جداً (الكتل)</option>
+                                <option value="10">10 - دقيق (المباني)</option>
+                                <option value="11">11 - دقيق جداً (مباني صغيرة)</option>
+                                <option value="12">12 - دقيق للغاية (الغرف)</option>
+                                <option value="13">13 - فائق الدقة</option>
+                                <option value="14">14 - فائق الدقة جداً</option>
+                                <option value="15">15 - أقصى دقة</option>
+                            </select>
+                        </div>
+                        
+                        <button type="button" class="btn btn-primary" onclick="addH3Hexagon()">➕ إضافة H3</button>
+                        <button type="button" class="btn btn-secondary" onclick="addAdjacentHexagons()">🔗 إضافة المجاورة</button>
+                        <button type="button" class="btn btn-secondary" onclick="clearSelectedHexagons()">🗑️ مسح الكل</button>
+                    </div>
+                    
+                    <div class="map-container">
+                        <div id="map"></div>
+                    </div>
+                    
+                    <div id="h3Info" class="h3-info" style="display: none;">
+                        <h3>✅ مناطق الدفع المحددة (<span id="h3Count">0</span>)</h3>
+                        <div id="h3List" style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
+                            <!-- H3 indices will be listed here -->
+                        </div>
+                        <p style="margin-top: 10px; color: #666; font-size: 12px;">
+                            <strong>الدقة:</strong> <span id="h3Resolution">-</span>
+                        </p>
+                    </div>
+                    
+                    <input type="hidden" id="h3IndicesInput" name="h3Indices" required>
+                    <input type="hidden" id="h3ResolutionInput" name="h3Resolution" required>
+                </div>
+                
+                <!-- Additional Information Section -->
+                <div class="form-section">
+                    <h2>معلومات إضافية</h2>
+                    
+                    <div class="form-row">
+                        <div class="input-group">
+                            <label for="businessType">نوع النشاط</label>
+                            <select id="businessType" name="businessType">
+                                <option value="">اختر نوع النشاط</option>
+                                <option value="retail">تجارة التجزئة</option>
+                                <option value="restaurant">مطعم</option>
+                                <option value="services">خدمات</option>
+                                <option value="other">أخرى</option>
+                            </select>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label for="status">الحالة</label>
+                            <select id="status" name="status">
+                                <option value="active" selected>نشط</option>
+                                <option value="inactive">غير نشط</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="input-group full-width">
+                            <label for="notes">ملاحظات</label>
+                            <textarea id="notes" name="notes" rows="3"></textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Form Actions -->
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">💾 حفظ بيانات التاجر</button>
+                    <button type="button" class="btn btn-secondary" onclick="viewMerchants()">📋 عرض التجار</button>
+                    <button type="button" class="btn btn-secondary" onclick="goToCustomerPage()">➡️ صفحة العميل</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- H3 JS -->
+    <script src="https://unpkg.com/h3-js@4.3.0/dist/h3-js.umd.js"></script>
+    <!-- PapaParse for CSV -->
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <!-- Common JS -->
+    <script src="common.js"></script>
+    
+    <script>
+        // Initialize merchant page when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeMerchantPage();
+        });
+    </script>
+</body>
+</html>
