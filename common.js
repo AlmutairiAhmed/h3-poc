@@ -555,6 +555,7 @@ let currentLocationMarker = null;
 let lockedAreaLayer = null;
 let currentLocation = null;
 let isValidLocation = false;
+let customerPreviewMarker = null;
 
 function initializeCustomerPage() {
     customerMap = initializeMap('map');
@@ -564,15 +565,100 @@ function initializeCustomerPage() {
         return;
     }
     
-    // Allow Enter key to validate
+    // Handle coordinate input
     const customerCoordinates = document.getElementById('customerCoordinates');
     if (customerCoordinates) {
+        customerCoordinates.addEventListener('paste', function(e) {
+            setTimeout(() => {
+                const coords = parseCoordinates(this.value);
+                if (coords) {
+                    document.getElementById('customerLatitude').value = coords.lat;
+                    document.getElementById('customerLongitude').value = coords.lng;
+                    showCustomerLocationPreview(coords.lat, coords.lng);
+                }
+            }, 10);
+        });
+        
+        customerCoordinates.addEventListener('blur', function() {
+            const coords = parseCoordinates(this.value);
+            if (coords) {
+                document.getElementById('customerLatitude').value = coords.lat;
+                document.getElementById('customerLongitude').value = coords.lng;
+                showCustomerLocationPreview(coords.lat, coords.lng);
+            }
+        });
+        
         customerCoordinates.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
-                validateLocation();
+                e.preventDefault();
+                const coords = parseCoordinates(this.value);
+                if (coords) {
+                    document.getElementById('customerLatitude').value = coords.lat;
+                    document.getElementById('customerLongitude').value = coords.lng;
+                    showCustomerLocationPreview(coords.lat, coords.lng);
+                    validateLocation();
+                }
             }
         });
     }
+    
+    // Handle latitude/longitude inputs
+    const latInput = document.getElementById('customerLatitude');
+    const lngInput = document.getElementById('customerLongitude');
+    if (latInput && lngInput) {
+        const updatePreview = () => {
+            const lat = parseFloat(latInput.value);
+            const lng = parseFloat(lngInput.value);
+            if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+                document.getElementById('customerCoordinates').value = `${lng.toFixed(6)}, ${lat.toFixed(6)}`;
+                showCustomerLocationPreview(lat, lng);
+            }
+        };
+        latInput.addEventListener('blur', updatePreview);
+        lngInput.addEventListener('blur', updatePreview);
+        latInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') updatePreview();
+        });
+        lngInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') updatePreview();
+        });
+    }
+    
+    // Click on map to select location
+    customerMap.on('click', function(e) {
+        const clickedLat = e.latlng.lat;
+        const clickedLng = e.latlng.lng;
+        
+        document.getElementById('customerLatitude').value = clickedLat.toFixed(6);
+        document.getElementById('customerLongitude').value = clickedLng.toFixed(6);
+        document.getElementById('customerCoordinates').value = `${clickedLng.toFixed(6)}, ${clickedLat.toFixed(6)}`;
+        
+        // Show preview on map
+        showCustomerLocationPreview(clickedLat, clickedLng);
+    });
+}
+
+/**
+ * Show customer location preview (marker)
+ */
+function showCustomerLocationPreview(lat, lng) {
+    // Remove old preview marker
+    if (customerPreviewMarker) {
+        customerMap.removeLayer(customerPreviewMarker);
+        customerPreviewMarker = null;
+    }
+    
+    // Add marker at location
+    customerPreviewMarker = L.marker([lat, lng], {
+        icon: L.divIcon({
+            html: '<div style="background: #007bff; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.4);"></div>',
+            iconSize: [16, 16],
+            iconAnchor: [8, 8]
+        })
+    }).addTo(customerMap);
+    
+    // Pan to location
+    customerMap.setView([lat, lng], customerMap.getZoom());
 }
 
 function loadLockedH3Data() {
@@ -664,8 +750,18 @@ function getCurrentLocation() {
             
             currentLocation = { lat, lng };
             
-            // Update input field
+            // Update input fields
             document.getElementById('customerCoordinates').value = `${lng.toFixed(6)}, ${lat.toFixed(6)}`;
+            const latInput = document.getElementById('customerLatitude');
+            const lngInput = document.getElementById('customerLongitude');
+            if (latInput) latInput.value = lat.toFixed(6);
+            if (lngInput) lngInput.value = lng.toFixed(6);
+            
+            // Remove preview marker if exists
+            if (customerPreviewMarker) {
+                customerMap.removeLayer(customerPreviewMarker);
+                customerPreviewMarker = null;
+            }
             
             // Update location info
             document.getElementById('currentCoords').textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
@@ -712,20 +808,43 @@ function validateLocation() {
         if (!loadLockedH3Data()) return;
     }
     
+    // Try to get coordinates from separate fields first, then combined field
+    let coords = null;
+    const latInput = document.getElementById('customerLatitude');
+    const lngInput = document.getElementById('customerLongitude');
     const coordsInput = document.getElementById('customerCoordinates').value;
-    if (!coordsInput) {
+    
+    if (latInput && lngInput && latInput.value && lngInput.value) {
+        const lat = parseFloat(latInput.value);
+        const lng = parseFloat(lngInput.value);
+        if (!isNaN(lat) && !isNaN(lng)) {
+            coords = { lat, lng };
+            // Update combined field
+            document.getElementById('customerCoordinates').value = `${lng.toFixed(6)}, ${lat.toFixed(6)}`;
+        }
+    }
+    
+    // If not found in separate fields, try combined field
+    if (!coords && coordsInput) {
+        coords = parseCoordinates(coordsInput);
+        if (coords && latInput && lngInput) {
+            latInput.value = coords.lat;
+            lngInput.value = coords.lng;
+        }
+    }
+    
+    if (!coords) {
         alert('الرجاء إدخال الإحداثيات أو الحصول على الموقع الحالي');
         return;
     }
     
-    // Parse coordinates
-    const coords = parseCoordinates(coordsInput);
-    if (!coords) {
-        alert('صيغة الإحداثيات غير صحيحة');
-        return;
-    }
-    
     currentLocation = coords;
+    
+    // Remove preview marker if exists
+    if (customerPreviewMarker) {
+        customerMap.removeLayer(customerPreviewMarker);
+        customerPreviewMarker = null;
+    }
     
     // Get H3 index for current location
     const currentH3Index = h3.latLngToCell(coords.lat, coords.lng, lockedH3Data.resolution);
@@ -769,18 +888,63 @@ function validateLocation() {
 }
 
 function processPayment() {
-    if (!isValidLocation) {
-        alert('❌ لا يمكن إتمام الدفع. موقعك خارج منطقة الدفع المسموحة.');
+    // Check if location is selected
+    let coords = currentLocation;
+    
+    if (!coords) {
+        // Try to get location from input fields
+        const latInput = document.getElementById('customerLatitude');
+        const lngInput = document.getElementById('customerLongitude');
+        const coordsInput = document.getElementById('customerCoordinates').value;
+        
+        // Try separate fields first
+        if (latInput && lngInput && latInput.value && lngInput.value) {
+            const lat = parseFloat(latInput.value);
+            const lng = parseFloat(lngInput.value);
+            if (!isNaN(lat) && !isNaN(lng)) {
+                coords = { lat, lng };
+            }
+        }
+        
+        // If not found, try combined field
+        if (!coords && coordsInput) {
+            coords = parseCoordinates(coordsInput);
+        }
+        
+        if (!coords) {
+            alert('❌ الرجاء تحديد موقعك أولاً (عن طريق النقر على الخريطة أو إدخال الإحداثيات)');
+            return;
+        }
+    }
+    
+    // If location exists but not validated, or location changed, validate it first
+    if (!isValidLocation || !currentLocation || 
+        (coords.lat !== currentLocation.lat) || (coords.lng !== currentLocation.lng)) {
+        // Set current location
+        currentLocation = coords;
+        // Validate location (this sets isValidLocation synchronously)
+        validateLocation();
+        
+        // Check validation result after a brief moment to let UI update
+        setTimeout(() => {
+            if (!isValidLocation) {
+                alert('❌ لا يمكن إتمام الدفع. موقعك خارج منطقة الدفع المسموحة.\n\nالرجاء اختيار موقع داخل المنطقة الخضراء على الخريطة.');
+                return;
+            }
+            // If valid, proceed with payment
+            proceedWithPayment();
+        }, 50);
         return;
     }
     
-    if (!currentLocation) {
-        alert('الرجاء التحقق من الموقع أولاً');
-        return;
-    }
-    
+    // Location is valid, proceed with payment
+    proceedWithPayment();
+}
+
+function proceedWithPayment() {
     // Simulate payment processing
     const statusDiv = document.getElementById('validationStatus');
+    statusDiv.style.display = 'block';
     statusDiv.className = 'validation-status pending';
     statusDiv.textContent = '⏳ جاري معالجة الدفع...';
     
