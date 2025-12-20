@@ -8,14 +8,14 @@
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- Common Styles -->
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
     <div class="container container-full">
         <div class="header customer">
             <h1>💳 صفحة الدفع - Customer Payment</h1>
             <p>أدخل موقعك للتحقق من إمكانية إتمام الدفع</p>
-            <a href="merchant.html" class="back-link">← العودة إلى صفحة التاجر</a>
+            <a href="/merchant" class="back-link">← العودة إلى صفحة التاجر</a>
         </div>
         
         <div class="payment-section">
@@ -73,8 +73,12 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- H3 JS -->
     <script src="https://unpkg.com/h3-js@4.3.0/dist/h3-js.umd.js"></script>
+    <!-- API Client -->
+    <script src="/static/app/scripts/api_client.js"></script>
     <!-- Common JS -->
-    <script src="common.js"></script>
+    <script src="/static/scripts.js"></script>
+    <!-- API Patch (overrides localStorage functions) -->
+    <script src="/static/scripts_api_patch.js"></script>
     
     <script>
         // Initialize customer page when DOM is ready

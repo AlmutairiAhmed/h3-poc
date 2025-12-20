@@ -1,0 +1,23 @@
+services:
+  web:
+    build: .
+    container_name: h3-payment-api
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount frontend and app directories for development
+      - ./frontend:/app/frontend
+      - ./app:/app/app
+      # Persist database
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:///./data/h3_payment.db
+      - CORS_ORIGINS=http://localhost:8000,http://127.0.0.1:8000,http://172.20.10.3:8000,http://0.0.0.0:8000,*
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/docs')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+

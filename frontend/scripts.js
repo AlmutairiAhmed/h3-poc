@@ -94,6 +94,41 @@ function getAdjacentHexagons(h3Index, radius = 1) {
 }
 
 /**
+ * Check if all H3 hexagons form a connected graph
+ * Returns true if all hexagons are connected (reachable from each other)
+ */
+function areHexagonsConnected(h3Indices) {
+    if (h3Indices.length <= 1) return true; // 0 or 1 hexagon is always connected
+    
+    const indices = h3Indices.map(idx => String(idx));
+    const visited = new Set();
+    const queue = [indices[0]];
+    visited.add(indices[0]);
+    
+    // BFS to check connectivity
+    while (queue.length > 0) {
+        const current = queue.shift();
+        
+        try {
+            const neighbors = h3.gridDisk(current, 1);
+            for (const neighbor of neighbors) {
+                const neighborStr = String(neighbor);
+                // If neighbor is in our selection and not visited, add to queue
+                if (indices.includes(neighborStr) && !visited.has(neighborStr)) {
+                    visited.add(neighborStr);
+                    queue.push(neighborStr);
+                }
+            }
+        } catch (error) {
+            console.error('Error checking connectivity:', error);
+        }
+    }
+    
+    // If we visited all hexagons, they're connected
+    return visited.size === indices.length;
+}
+
+/**
  * Validate if location is in H3 indices
  */
 function validateLocationInH3(lat, lng, h3Indices, resolution) {
@@ -154,7 +189,7 @@ function initializeMerchantPage() {
         });
     }
     
-    // Click on map
+    // Click on map - automatically add/remove H3 hexagon with adjacency validation
     merchantMap.on('click', function(e) {
         const clickedLat = e.latlng.lat;
         const clickedLng = e.latlng.lng;
@@ -165,12 +200,85 @@ function initializeMerchantPage() {
         
         // Show preview on map
         showLocationPreview(clickedLat, clickedLng);
+        
+        // Get resolution and calculate H3 index for clicked location
+        const resolution = parseInt(document.getElementById('resolution').value);
+        const clickedH3Index = String(h3.latLngToCell(clickedLat, clickedLng, resolution));
+        
+        // Check if this H3 is already selected - if yes, check if removal would disconnect
+        if (selectedH3Hexagons.has(clickedH3Index)) {
+            // If only one hexagon, allow removal
+            if (selectedH3Hexagons.size === 1) {
+                removeH3Hexagon(clickedH3Index);
+                return;
+            }
+            
+            // Check if removing this hexagon would disconnect the remaining ones
+            const currentIndices = Array.from(selectedH3Hexagons.keys()).map(idx => String(idx));
+            const remainingIndices = currentIndices.filter(idx => idx !== clickedH3Index);
+            
+            if (!areHexagonsConnected(remainingIndices)) {
+                alert('❌ لا يمكن إزالة هذا H3! إزالته ستفصل المناطق المحددة.\n\nالمناطق المحددة يجب أن تبقى متصلة.');
+                return;
+            }
+            
+            // Safe to remove
+            removeH3Hexagon(clickedH3Index);
+            return;
+        }
+        
+        // If there are existing selections, validate adjacency
+        if (selectedH3Hexagons.size > 0) {
+            // Get all currently selected H3 indices
+            const currentIndices = Array.from(selectedH3Hexagons.keys()).map(idx => String(idx));
+            
+            // Check if clicked H3 is adjacent to any existing selection
+            let isAdjacent = false;
+            for (const existingIndex of currentIndices) {
+                try {
+                    const neighbors = h3.gridDisk(String(existingIndex), 1);
+                    if (neighbors.includes(clickedH3Index)) {
+                        isAdjacent = true;
+                        break;
+                    }
+                } catch (error) {
+                    console.error('Error checking adjacency:', error);
+                }
+            }
+            
+            if (!isAdjacent) {
+                alert('❌ يمكنك فقط إضافة H3 مجاور للمناطق المحددة مسبقاً!\n\nالرجاء النقر على منطقة مجاورة للمناطق الخضراء المحددة.');
+                return;
+            }
+        }
+        
+        // If not selected and (no existing selections OR adjacent), add it
+        addH3Hexagon();
     });
     
     // Update preview when resolution changes
     const resolutionSelect = document.getElementById('resolution');
     if (resolutionSelect) {
+        // Store initial resolution
+        let previousResolution = parseInt(resolutionSelect.value) || 9;
+        
         resolutionSelect.addEventListener('change', function() {
+            const newResolution = parseInt(this.value) || 9;
+            
+            // If resolution changed, clear all selected hexagons
+            if (newResolution !== previousResolution && selectedH3Hexagons.size > 0) {
+                if (confirm('تغيير الدقة سيحذف جميع H3 المحددة مسبقاً. هل تريد المتابعة؟')) {
+                    clearSelectedHexagons();
+                } else {
+                    // Revert to previous resolution
+                    this.value = previousResolution;
+                    return;
+                }
+            }
+            
+            previousResolution = newResolution;
+            
+            // Update preview if coordinates exist
             const lat = parseFloat(document.getElementById('latitude').value);
             const lng = parseFloat(document.getElementById('longitude').value);
             if (lat && lng) {
@@ -193,10 +301,26 @@ function initializeMerchantPage() {
         latInput.addEventListener('blur', updatePreview);
         lngInput.addEventListener('blur', updatePreview);
         latInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') updatePreview();
+            if (e.key === 'Enter') {
+                updatePreview();
+                // Automatically add H3 hexagon if both fields have values
+                const lat = parseFloat(latInput.value);
+                const lng = parseFloat(lngInput.value);
+                if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+                    addH3Hexagon();
+                }
+            }
         });
         lngInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') updatePreview();
+            if (e.key === 'Enter') {
+                updatePreview();
+                // Automatically add H3 hexagon if both fields have values
+                const lat = parseFloat(latInput.value);
+                const lng = parseFloat(lngInput.value);
+                if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+                    addH3Hexagon();
+                }
+            }
         });
     }
 }
@@ -254,8 +378,19 @@ function addH3Hexagon() {
         return;
     }
     
+    // Check if there are existing hexagons with different resolution
+    if (selectedH3Hexagons.size > 0) {
+        const firstH3 = Array.from(selectedH3Hexagons.values())[0];
+        if (firstH3.resolution !== resolution) {
+            alert(`❌ لا يمكن إضافة H3 بدقة مختلفة!\n\nالدقة الحالية المحددة: ${firstH3.resolution}\nالدقة المختارة: ${resolution}\n\nالرجاء تغيير الدقة أولاً (سيتم مسح جميع H3 المحددة)`);
+            // Reset resolution dropdown to match existing
+            document.getElementById('resolution').value = firstH3.resolution;
+            return;
+        }
+    }
+    
     try {
-        const h3Index = h3.latLngToCell(lat, lng, resolution);
+        const h3Index = String(h3.latLngToCell(lat, lng, resolution));
         
         if (!h3Index) {
             throw new Error('فشل تحويل الإحداثيات');
@@ -287,7 +422,7 @@ function addH3Hexagon() {
             })
         }).addTo(merchantMap);
         
-        // Store hexagon data
+        // Store hexagon data with normalized string key
         selectedH3Hexagons.set(h3Index, {
             layer: hexLayer,
             marker: marker,
@@ -316,27 +451,37 @@ function addAdjacentHexagons() {
         return;
     }
     
-    const resolution = parseInt(document.getElementById('resolution').value);
+    // Get resolution from existing hexagons (not from dropdown)
+    const firstH3 = Array.from(selectedH3Hexagons.values())[0];
+    const resolution = firstH3.resolution;
+    
+    // Ensure dropdown matches the resolution of selected hexagons
+    document.getElementById('resolution').value = resolution;
+    
     const addedHexagons = [];
     
-    // Get all currently selected H3 indices
-    const currentIndices = Array.from(selectedH3Hexagons.keys());
+    // Get all currently selected H3 indices (ensure they're strings)
+    const currentIndices = Array.from(selectedH3Hexagons.keys()).map(idx => String(idx));
     
     // For each selected hexagon, get its neighbors
     currentIndices.forEach(h3Index => {
         try {
-            const neighbors = h3.gridDisk(h3Index, 1);
+            // Ensure h3Index is a string for h3.gridDisk
+            const neighbors = h3.gridDisk(String(h3Index), 1);
             
             neighbors.forEach(neighborIndex => {
+                // Normalize neighbor index to string
+                const neighborStr = String(neighborIndex);
+                
                 // Skip if already selected
-                if (!selectedH3Hexagons.has(neighborIndex)) {
+                if (!selectedH3Hexagons.has(neighborStr)) {
                     // Get center of neighbor hexagon
-                    const center = h3.cellToLatLng(neighborIndex);
+                    const center = h3.cellToLatLng(neighborStr);
                     const lat = center[0];
                     const lng = center[1];
                     
                     // Draw hexagon
-                    const hexBoundary = h3.cellToBoundary(neighborIndex, true);
+                    const hexBoundary = h3.cellToBoundary(neighborStr, true);
                     const polygonCoords = hexBoundary.map(coord => [coord[1], coord[0]]);
                     
                     const hexLayer = L.polygon(polygonCoords, {
@@ -355,16 +500,17 @@ function addAdjacentHexagons() {
                         })
                     }).addTo(merchantMap);
                     
-                    selectedH3Hexagons.set(neighborIndex, {
+                    // Store with normalized string key
+                    selectedH3Hexagons.set(neighborStr, {
                         layer: hexLayer,
                         marker: marker,
-                        h3Index: neighborIndex,
+                        h3Index: neighborStr,
                         resolution: resolution,
                         lat: lat,
                         lng: lng
                     });
                     
-                    addedHexagons.push(neighborIndex);
+                    addedHexagons.push(neighborStr);
                 }
             });
         } catch (error) {
@@ -542,7 +688,7 @@ function goToCustomerPage() {
         resolution: firstH3.resolution
     }));
     
-    window.location.href = 'customer.html';
+    window.location.href = '/customer';
 }
 
 // ============================================
@@ -846,8 +992,8 @@ function validateLocation() {
         customerPreviewMarker = null;
     }
     
-    // Get H3 index for current location
-    const currentH3Index = h3.latLngToCell(coords.lat, coords.lng, lockedH3Data.resolution);
+    // Get H3 index for current location (normalize to string)
+    const currentH3Index = String(h3.latLngToCell(coords.lat, coords.lng, lockedH3Data.resolution));
     
     // Update location info
     document.getElementById('currentCoords').textContent = `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
@@ -872,9 +1018,15 @@ function validateLocation() {
     const statusDiv = document.getElementById('validationStatus');
     statusDiv.style.display = 'block';
     
-    const h3Indices = Array.isArray(lockedH3Data.h3Indices) 
-        ? lockedH3Data.h3Indices 
-        : [lockedH3Data.h3Index].filter(Boolean);
+    // Normalize all indices to strings for comparison
+    let h3Indices = Array.isArray(lockedH3Data.h3Indices) 
+        ? lockedH3Data.h3Indices.map(idx => String(idx))
+        : [String(lockedH3Data.h3Index)].filter(Boolean);
+    
+    // Also handle if h3Indices is a comma-separated string
+    if (typeof lockedH3Data.h3Indices === 'string' && lockedH3Data.h3Indices.includes(',')) {
+        h3Indices = lockedH3Data.h3Indices.split(',').map(idx => String(idx.trim()));
+    }
     
     if (h3Indices.includes(currentH3Index)) {
         statusDiv.className = 'validation-status valid';

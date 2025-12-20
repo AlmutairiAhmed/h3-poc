@@ -25,3 +25,14 @@ npm-debug.log*
 *.tmp
 *.temp
 
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Docker
+data/
+*.db
+*.sqlite
+*.sqlite3
+

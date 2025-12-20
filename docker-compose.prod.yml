@@ -1,0 +1,30 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: h3-payment-api-prod
+    ports:
+      - "8000:8000"
+    volumes:
+      # Only persist database in production
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:///./data/h3_payment.db
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8000}
+      - SECRET_KEY=${SECRET_KEY}
+    restart: always
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/docs')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Uncomment for production with reverse proxy
+    # networks:
+    #   - nginx-proxy
+
+# networks:
+#   nginx-proxy:
+#     external: true
+
